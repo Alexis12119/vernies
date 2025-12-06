@@ -177,8 +177,8 @@ app.get("/products", authenticateToken, async (req, res) => {
 
 app.post("/products", authenticateToken, async (req, res) => {
   try {
-    if (req.user.role !== "owner") {
-      return res.status(403).json({ error: "Only owners can create products" });
+    if (req.user.role !== "owner" && req.user.role !== "branch_admin") {
+      return res.status(403).json({ error: "Only owners and branch admins can create products" });
     }
 
     const { name, description, price } = req.body;
@@ -201,23 +201,81 @@ app.post("/products", authenticateToken, async (req, res) => {
 
 app.put("/products/:id", authenticateToken, async (req, res) => {
   try {
-    if (req.user.role !== "owner") {
-      return res.status(403).json({ error: "Only owners can update products" });
+    if (req.user.role !== "owner" && req.user.role !== "branch_admin") {
+      return res.status(403).json({ error: "Only owners and branch admins can update products" });
     }
 
     const { id } = req.params;
+    
+    // Log the entire request for debugging
+    console.log('=== PRODUCT UPDATE REQUEST ===');
+    console.log('Method:', req.method);
+    console.log('URL:', req.url);
+    console.log('Headers:', req.headers);
+    console.log('Body:', req.body);
+    console.log('User:', req.user);
+    console.log('================================');
+    
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ error: "Invalid request body. Please send JSON data." });
+    }
+    
     const { name, description, price } = req.body;
+    
+    // Validate required fields
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ error: "Product name is required" });
+    }
+    
+    if (!price || parseFloat(price) <= 0) {
+      return res.status(400).json({ error: "Product price must be greater than 0" });
+    }
 
-    await db.execute(
+    const [result] = await db.execute(
       "UPDATE products SET name = ?, description = ?, price = ? WHERE id = ?",
       [name, description, price, id],
     );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Product not found" });
+    }
 
     await logActivity(req.user.id, `Updated product ID: ${id}`);
 
     res.json({ message: "Product updated successfully" });
   } catch (error) {
-    res.status(500).json({ error: "Product update failed" });
+    console.error('Product update error:', error);
+    res.status(500).json({ error: "Product update failed", details: error.message });
+  }
+});
+
+app.delete("/products/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== "owner" && req.user.role !== "branch_admin") {
+      return res.status(403).json({ error: "Only owners and branch admins can delete products" });
+    }
+
+    const { id } = req.params;
+
+    // Prevent deletion if product is used in sales
+    const [salesCheck] = await db.execute(
+      "SELECT COUNT(*) as count FROM sales_items WHERE product_id = ?",
+      [id]
+    );
+
+    if (salesCheck[0].count > 0) {
+      return res.status(400).json({ 
+        error: "Cannot delete product that has been used in sales" 
+      });
+    }
+
+    await db.execute("DELETE FROM products WHERE id = ?", [id]);
+
+    await logActivity(req.user.id, `Deleted product ID: ${id}`);
+
+    res.json({ message: "Product deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete product" });
   }
 });
 
@@ -250,6 +308,8 @@ app.post("/sales", authenticateToken, async (req, res) => {
           "UPDATE inventory SET stock = stock - ? WHERE product_id = ? AND branch_id = ?",
           [item.qty, item.product_id, branchId],
         );
+
+        await checkLowStock(item.product_id, branchId);
 
         totalAmount += item.price * item.qty;
       }
@@ -352,6 +412,8 @@ app.post("/inventory", authenticateToken, async (req, res) => {
       [product_id, branch_id, stock, stock],
     );
 
+    await checkLowStock(product_id, branch_id);
+
     await logActivity(
       req.user.id,
       `Updated inventory for product ${product_id}`,
@@ -410,7 +472,277 @@ app.get("/activity-logs", authenticateToken, async (req, res) => {
   }
 });
 
+app.put("/users/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== "owner") {
+      return res.status(403).json({ error: "Only owners can update users" });
+    }
+
+    const { id } = req.params;
+    const { email, role, branch_id, password } = req.body;
+
+    // Build update query dynamically
+    let updateFields = [];
+    let updateValues = [];
+
+    if (email) {
+      updateFields.push("email = ?");
+      updateValues.push(email);
+    }
+    if (role) {
+      updateFields.push("role = ?");
+      updateValues.push(role);
+    }
+    if (branch_id !== undefined) {
+      updateFields.push("branch_id = ?");
+      updateValues.push(branch_id || null);
+    }
+    if (password) {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      updateFields.push("password_hash = ?");
+      updateValues.push(hashedPassword);
+    }
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({ error: "No fields to update" });
+    }
+
+    updateValues.push(id);
+
+    await db.execute(
+      `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`,
+      updateValues
+    );
+
+    await logActivity(req.user.id, `Updated user ID: ${id}`);
+
+    res.json({ message: "User updated successfully" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update user" });
+  }
+});
+
+app.delete("/users/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== "owner") {
+      return res.status(403).json({ error: "Only owners can delete users" });
+    }
+
+    const { id } = req.params;
+
+    // Prevent deletion of current user
+    if (parseInt(id) === req.user.id) {
+      return res.status(400).json({ error: "Cannot delete your own account" });
+    }
+
+    await db.execute("DELETE FROM users WHERE id = ?", [id]);
+
+    await logActivity(req.user.id, `Deleted user ID: ${id}`);
+
+    res.json({ message: "User deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete user" });
+  }
+});
+
+// Notification endpoints
+app.get("/notifications", authenticateToken, async (req, res) => {
+  try {
+    const [notifications] = await db.execute(`
+      SELECT * FROM notifications 
+      WHERE user_id = ? 
+      ORDER BY created_at DESC
+      LIMIT 50
+    `, [req.user.id]);
+    res.json(notifications);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch notifications" });
+  }
+});
+
+app.post("/notifications/:id/read", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.execute(
+      "UPDATE notifications SET is_read = TRUE WHERE id = ? AND user_id = ?",
+      [id, req.user.id]
+    );
+    res.json({ message: "Notification marked as read" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update notification" });
+  }
+});
+
+app.post("/notifications/read-all", authenticateToken, async (req, res) => {
+  try {
+    await db.execute(
+      "UPDATE notifications SET is_read = TRUE WHERE user_id = ?",
+      [req.user.id]
+    );
+    res.json({ message: "All notifications marked as read" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update notifications" });
+  }
+});
+
+app.get("/notification-preferences", authenticateToken, async (req, res) => {
+  try {
+    const [preferences] = await db.execute(
+      "SELECT * FROM notification_preferences WHERE user_id = ?",
+      [req.user.id]
+    );
+    
+    if (preferences.length === 0) {
+      await db.execute(
+        "INSERT INTO notification_preferences (user_id) VALUES (?)",
+        [req.user.id]
+      );
+      const [newPreferences] = await db.execute(
+        "SELECT * FROM notification_preferences WHERE user_id = ?",
+        [req.user.id]
+      );
+      res.json(newPreferences[0]);
+    } else {
+      res.json(preferences[0]);
+    }
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch notification preferences" });
+  }
+});
+
+app.put("/notification-preferences", authenticateToken, async (req, res) => {
+  try {
+    const { low_stock_alerts, system_alerts, email_notifications } = req.body;
+    
+    await db.execute(
+      `UPDATE notification_preferences 
+       SET low_stock_alerts = ?, system_alerts = ?, email_notifications = ? 
+       WHERE user_id = ?`,
+      [low_stock_alerts, system_alerts, email_notifications, req.user.id]
+    );
+    
+    res.json({ message: "Notification preferences updated" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update notification preferences" });
+  }
+});
+
+async function createNotification(userId, title, message, type = 'info') {
+  try {
+    const [preferences] = await db.execute(
+      "SELECT * FROM notification_preferences WHERE user_id = ?",
+      [userId]
+    );
+    
+    const userPrefs = preferences[0];
+    if (!userPrefs) return;
+    
+    if (type === 'low_stock' && !userPrefs.low_stock_alerts) return;
+    if (type === 'system' && !userPrefs.system_alerts) return;
+    
+    // Ensure type is a valid ENUM value
+    const validTypes = ['low_stock', 'system', 'info'];
+    const notificationType = validTypes.includes(type) ? type : 'info';
+    
+    // Check for duplicate notification within last 5 minutes
+    const [existingNotifications] = await db.execute(
+      `SELECT id FROM notifications 
+       WHERE user_id = ? AND title = ? AND message = ? AND type = ? 
+       AND created_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE)`,
+      [userId, title, message, notificationType]
+    );
+    
+    if (existingNotifications.length > 0) {
+      console.log('Duplicate notification prevented');
+      return;
+    }
+    
+    await db.execute(
+      "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)",
+      [userId, title, message, notificationType]
+    );
+  } catch (error) {
+    console.error("Failed to create notification:", error);
+  }
+}
+
+async function checkLowStock(productId, branchId) {
+  try {
+    const [inventory] = await db.execute(
+      "SELECT i.stock, p.name FROM inventory i JOIN products p ON i.product_id = p.id WHERE i.product_id = ? AND i.branch_id = ?",
+      [productId, branchId]
+    );
+    
+    if (inventory.length > 0 && inventory[0].stock <= 10) {
+      const [admins] = await db.execute(
+        "SELECT id FROM users WHERE role IN ('owner', 'branch_admin') AND (branch_id = ? OR role = 'owner')",
+        [branchId]
+      );
+      
+      for (const admin of admins) {
+        await createNotification(
+          admin.id,
+          "Low Stock Alert",
+          `Product "${inventory[0].name}" at branch ${branchId} has only ${inventory[0].stock} units remaining. Restocking is needed.`,
+          'low_stock'
+        );
+      }
+    }
+  } catch (error) {
+    console.error("Failed to check low stock:", error);
+  }
+}
+
+async function checkAllLowStock() {
+  try {
+    const [lowStockItems] = await db.execute(`
+      SELECT i.product_id, i.branch_id, i.stock, p.name, b.name as branch_name
+      FROM inventory i
+      JOIN products p ON i.product_id = p.id
+      JOIN branches b ON i.branch_id = b.id
+      WHERE i.stock <= 10
+    `);
+    
+    for (const item of lowStockItems) {
+      const [admins] = await db.execute(
+        "SELECT id FROM users WHERE role IN ('owner', 'branch_admin') AND (branch_id = ? OR role = 'owner')",
+        [item.branch_id]
+      );
+      
+      for (const admin of admins) {
+        await createNotification(
+          admin.id,
+          "Low Stock Alert",
+          `Product "${item.name}" at ${item.branch_name} has only ${item.stock} units remaining. Restocking is needed.`,
+          'low_stock'
+        );
+      }
+    }
+  } catch (error) {
+    console.error("Failed to check all low stock:", error);
+  }
+}
+
+// Schedule low stock check every 5 minutes
+setInterval(async () => {
+  try {
+    await checkAllLowStock();
+  } catch (error) {
+    console.error("Scheduled low stock check failed:", error);
+  }
+}, 5 * 60 * 1000);
+
 app.listen(PORT, async () => {
   await initDB();
   console.log(`Server running on port ${PORT}`);
+  
+  // Run initial low stock check after server starts
+  setTimeout(async () => {
+    try {
+      await checkAllLowStock();
+      console.log("Initial low stock check completed");
+    } catch (error) {
+      console.error("Initial low stock check failed:", error);
+    }
+  }, 5000);
 });

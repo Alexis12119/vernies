@@ -38,6 +38,7 @@ export const productAPI = {
   getProducts: () => api.get("/products"),
   createProduct: (productData) => api.post("/products", productData),
   updateProduct: (id, productData) => api.put(`/products/${id}`, productData),
+  deleteProduct: (id) => api.delete(`/products/${id}`),
 };
 
 export const salesAPI = {
@@ -56,6 +57,8 @@ export const branchAPI = {
 
 export const userAPI = {
   getUsers: () => api.get("/users"),
+  updateUser: (id, userData) => api.put(`/users/${id}`, userData),
+  deleteUser: (id) => api.delete(`/users/${id}`),
 };
 
 export const activityAPI = {
@@ -63,4 +66,3 @@ export const activityAPI = {
 };
 
 export default api;
-

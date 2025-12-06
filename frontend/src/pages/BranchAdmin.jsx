@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { productAPI, salesAPI, inventoryAPI } from '../services/api';
+import NotificationCenter from '../components/NotificationCenter';
 
 const BranchAdmin = () => {
   const { user, logout } = useAuth();
@@ -71,12 +72,27 @@ const BranchAdmin = () => {
 
   const updateProduct = async (productId, productData) => {
     try {
+      console.log('Updating product:', productId, productData);
       await productAPI.updateProduct(productId, productData);
       setEditingProduct(null);
       fetchData();
       alert('Product updated successfully!');
     } catch (error) {
       alert('Failed to update product: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  const deleteProduct = async (productId) => {
+    if (!confirm('Are you sure you want to delete this product? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      await productAPI.deleteProduct(productId);
+      fetchData();
+      alert('Product deleted successfully!');
+    } catch (error) {
+      alert('Failed to delete product: ' + (error.response?.data?.error || error.message));
     }
   };
 
@@ -92,16 +108,28 @@ const BranchAdmin = () => {
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Branch Admin Dashboard</h1>
-              <p className="text-sm text-gray-500">Branch: {user.branch_id || 'Not assigned'}</p>
+            <div className="flex justify-between items-center w-full">
+              <div className="flex items-center space-x-3">
+                <img 
+                  src="/logo.png" 
+                  alt="Vernie's Shopping Plaza"
+                  className="h-16 w-auto"
+                />
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">Branch Admin Dashboard</h1>
+                  <p className="text-sm text-gray-500">Branch: {user.branch_id || 'Not assigned'}</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-4">
+                <NotificationCenter />
+                <button
+                  onClick={logout}
+                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+                >
+                  Logout
+                </button>
+              </div>
             </div>
-            <button
-              onClick={logout}
-              className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
-            >
-              Logout
-            </button>
           </div>
         </div>
       </header>
@@ -115,7 +143,7 @@ const BranchAdmin = () => {
                 onClick={() => setActiveTab(tab)}
                 className={`px-4 py-2 font-medium capitalize ${
                   activeTab === tab
-                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    ? 'text-orange-600 border-b-2 border-orange-600'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
@@ -129,7 +157,7 @@ const BranchAdmin = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="text-lg font-semibold mb-2">Today's Sales</h3>
-              <p className="text-3xl font-bold text-green-600">${getTotalSales().toFixed(2)}</p>
+              <p className="text-3xl font-bold text-green-600">₱ {getTotalSales().toFixed(2)}</p>
               <p className="text-sm text-gray-500">{getTodaySales().length} transactions</p>
             </div>
             <div className="bg-white rounded-lg shadow p-6">
@@ -139,7 +167,7 @@ const BranchAdmin = () => {
             </div>
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="text-lg font-semibold mb-2">Low Stock Items</h3>
-              <p className="text-3xl font-bold text-orange-600">
+              <p className="text-3xl font-bold text-blue-600">
                 {branchInventory.filter(item => item.stock < 10).length}
               </p>
               <p className="text-sm text-gray-500">Need restocking</p>
@@ -166,7 +194,7 @@ const BranchAdmin = () => {
                   {branchInventory.map(item => (
                     <tr key={item.id}>
                       <td className="px-6 py-4 whitespace-nowrap">{item.product_name}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">${item.price}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">₱ {item.price}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 rounded text-xs ${
                           item.stock < 10 ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
@@ -219,7 +247,7 @@ const BranchAdmin = () => {
                   />
                   <button
                     onClick={addProduct}
-                    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded"
                   >
                     Add
                   </button>
@@ -246,14 +274,22 @@ const BranchAdmin = () => {
                       <tr key={product.id}>
                         <td className="px-6 py-4 whitespace-nowrap">{product.name}</td>
                         <td className="px-6 py-4">{product.description}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">${product.price}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">₱ {product.price}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <button
-                            onClick={() => setEditingProduct(product)}
-                            className="text-blue-600 hover:text-blue-800"
-                          >
-                            Edit
-                          </button>
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => setEditingProduct(product)}
+                              className="text-orange-600 hover:text-orange-800"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => deleteProduct(product.id)}
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -284,7 +320,7 @@ const BranchAdmin = () => {
                     <tr key={sale.id}>
                       <td className="px-6 py-4 whitespace-nowrap">#{sale.id}</td>
                       <td className="px-6 py-4 whitespace-nowrap">{sale.cashier_email}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">${parseFloat(sale.total_amount).toFixed(2)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">₱ {parseFloat(sale.total_amount).toFixed(2)}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {new Date(sale.created_at).toLocaleString()}
                       </td>
@@ -292,6 +328,63 @@ const BranchAdmin = () => {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Product Modal */}
+        {editingProduct && (
+          <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 shadow-lg">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <h2 className="text-xl font-bold mb-4">Edit Product</h2>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Product Name</label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 border rounded"
+                    value={editingProduct.name}
+                    onChange={(e) => setEditingProduct({...editingProduct, name: e.target.value})}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <textarea
+                    className="w-full px-3 py-2 border rounded"
+                    rows="3"
+                    value={editingProduct.description}
+                    onChange={(e) => setEditingProduct({...editingProduct, description: e.target.value})}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Price</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="w-full px-3 py-2 border rounded"
+                    value={editingProduct.price}
+                    onChange={(e) => setEditingProduct({...editingProduct, price: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => setEditingProduct(null)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Cancel
+                </button>
+                 <button
+                   onClick={() => updateProduct(editingProduct.id, editingProduct)}
+                   className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded"
+                 >
+                   Update Product
+                 </button>
+              </div>
             </div>
           </div>
         )}

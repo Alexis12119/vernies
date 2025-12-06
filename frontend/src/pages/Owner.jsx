@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { productAPI, salesAPI, inventoryAPI, branchAPI, userAPI, activityAPI, authAPI } from '../services/api';
+import NotificationCenter from '../components/NotificationCenter';
 
 const Owner = () => {
   const { user, logout } = useAuth();
@@ -13,6 +14,7 @@ const Owner = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [newUser, setNewUser] = useState({ email: '', password: '', role: 'cashier', branch_id: '' });
+  const [editingUser, setEditingUser] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -89,6 +91,51 @@ const Owner = () => {
     }
   };
 
+  const editUser = (user) => {
+    setEditingUser({
+      ...user,
+      password: '' // Don't pre-fill password for security
+    });
+  };
+
+  const updateUser = async () => {
+    try {
+      if (!editingUser) return;
+      
+      const updateData = {
+        email: editingUser.email,
+        role: editingUser.role,
+        branch_id: editingUser.branch_id
+      };
+      
+      // Only include password if it's provided
+      if (editingUser.password) {
+        updateData.password = editingUser.password;
+      }
+      
+      await userAPI.updateUser(editingUser.id, updateData);
+      setEditingUser(null);
+      fetchData();
+      alert('User updated successfully!');
+    } catch (error) {
+      alert('Failed to update user: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  const deleteUser = async (userId) => {
+    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      await userAPI.deleteUser(userId);
+      fetchData();
+      alert('User deleted successfully!');
+    } catch (error) {
+      alert('Failed to delete user: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
   if (loading) {
     return <div className="flex justify-center items-center h-screen">Loading...</div>;
   }
@@ -101,16 +148,28 @@ const Owner = () => {
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Owner Dashboard</h1>
-              <p className="text-sm text-gray-500">System Overview</p>
+            <div className="flex justify-between items-center w-full">
+              <div className="flex items-center space-x-3">
+                <img 
+                  src="/logo.png" 
+                    alt="Vernie's Shopping Plaza"
+                  className="h-16 w-auto"
+                />
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">Owner Dashboard</h1>
+                  <p className="text-sm text-gray-500">System Overview</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-4">
+                <NotificationCenter />
+                <button
+                  onClick={logout}
+                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+                >
+                  Logout
+                </button>
+              </div>
             </div>
-            <button
-              onClick={logout}
-              className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
-            >
-              Logout
-            </button>
           </div>
         </div>
       </header>
@@ -140,7 +199,7 @@ const Owner = () => {
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-lg font-semibold mb-2">Today's Sales</h3>
                 <p className="text-3xl font-bold text-green-600">
-                  ${todaySales.reduce((sum, sale) => sum + parseFloat(sale.total_amount), 0).toFixed(2)}
+                 ₱ {todaySales.reduce((sum, sale) => sum + parseFloat(sale.total_amount), 0).toFixed(2)}
                 </p>
                 <p className="text-sm text-gray-500">{todaySales.length} transactions</p>
               </div>
@@ -156,7 +215,7 @@ const Owner = () => {
               </div>
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-lg font-semibold mb-2">Total Users</h3>
-                <p className="text-3xl font-bold text-orange-600">{users.length}</p>
+                <p className="text-3xl font-bold text-blue-600">{users.length}</p>
                 <p className="text-sm text-gray-500">System users</p>
               </div>
             </div>
@@ -179,8 +238,8 @@ const Owner = () => {
                     {branchSalesData.map(branch => (
                       <tr key={branch.id}>
                         <td className="px-6 py-4 whitespace-nowrap font-medium">{branch.name}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">${branch.todaySales.toFixed(2)}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">${branch.totalSales.toFixed(2)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">₱ {branch.todaySales.toFixed(2)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">₱ {branch.totalSales.toFixed(2)}</td>
                         <td className="px-6 py-4 whitespace-nowrap">{branch.transactionCount}</td>
                       </tr>
                     ))}
@@ -212,8 +271,8 @@ const Owner = () => {
                     return (
                       <tr key={branch.id}>
                         <td className="px-6 py-4 whitespace-nowrap font-medium">{branch.name}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">${branch.todaySales.toFixed(2)}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">${branch.totalSales.toFixed(2)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">₱ {branch.todaySales.toFixed(2)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">₱ {branch.totalSales.toFixed(2)}</td>
                         <td className="px-6 py-4 whitespace-nowrap">{branchUsers.length}</td>
                       </tr>
                     );
@@ -310,7 +369,7 @@ const Owner = () => {
                   </select>
                   <button
                     onClick={createUser}
-                    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded"
                   >
                     Create
                   </button>
@@ -329,6 +388,7 @@ const Owner = () => {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Branch</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
@@ -338,13 +398,29 @@ const Owner = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 py-1 rounded text-xs ${
                             user.role === 'owner' ? 'bg-purple-100 text-purple-800' :
-                            user.role === 'branch_admin' ? 'bg-blue-100 text-blue-800' :
+                            user.role === 'branch_admin' ? 'bg-orange-100 text-blue-800' :
                             'bg-green-100 text-green-800'
                           }`}>
                             {user.role}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">{user.branch_name || 'N/A'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => editUser(user)}
+                              className="text-blue-600 hover:text-blue-800"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => deleteUser(user.id)}
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -412,7 +488,7 @@ const Owner = () => {
                       <td className="px-6 py-4 whitespace-nowrap">#{sale.id}</td>
                       <td className="px-6 py-4 whitespace-nowrap">{sale.branch_name}</td>
                       <td className="px-6 py-4 whitespace-nowrap">{sale.cashier_email}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">${parseFloat(sale.total_amount).toFixed(2)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">₱ {parseFloat(sale.total_amount).toFixed(2)}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {new Date(sale.created_at).toLocaleString()}
                       </td>
@@ -450,6 +526,80 @@ const Owner = () => {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* Edit User Modal */}
+        {editingUser && (
+          <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 shadow-lg">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <h2 className="text-xl font-bold mb-4">Edit User</h2>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    className="w-full px-3 py-2 border rounded"
+                    value={editingUser.email}
+                    onChange={(e) => setEditingUser({...editingUser, email: e.target.value})}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">New Password (leave blank to keep current)</label>
+                  <input
+                    type="password"
+                    className="w-full px-3 py-2 border rounded"
+                    value={editingUser.password}
+                    onChange={(e) => setEditingUser({...editingUser, password: e.target.value})}
+                    placeholder="Leave blank to keep current password"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                  <select
+                    className="w-full px-3 py-2 border rounded"
+                    value={editingUser.role}
+                    onChange={(e) => setEditingUser({...editingUser, role: e.target.value})}
+                  >
+                    <option value="cashier">Cashier</option>
+                    <option value="branch_admin">Branch Admin</option>
+                    <option value="owner">Owner</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+                  <select
+                    className="w-full px-3 py-2 border rounded"
+                    value={editingUser.branch_id}
+                    onChange={(e) => setEditingUser({...editingUser, branch_id: e.target.value})}
+                  >
+                    <option value="">Select Branch</option>
+                    {branches.map(branch => (
+                      <option key={branch.id} value={branch.id}>{branch.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => setEditingUser(null)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={updateUser}
+                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded"
+                >
+                  Update User
+                </button>
+              </div>
             </div>
           </div>
         )}
