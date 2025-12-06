@@ -153,11 +153,18 @@ const CashierPOS = () => {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Cashier POS</h1>
-              <p className="text-sm text-gray-500">Branch: {user.branch_id || 'Not assigned'}</p>
-            </div>
+           <div className="flex justify-between items-center py-4">
+             <div className="flex items-center space-x-3">
+               <img 
+                 src="/logo.png" 
+                 alt="Vernie's Shopping Plaza"
+                 className="h-16 w-auto"
+               />
+               <div>
+                 <h1 className="text-2xl font-bold text-gray-900">Cashier POS</h1>
+                 <p className="text-sm text-gray-500">Branch: {user.branch_id || 'Not assigned'}</p>
+               </div>
+             </div>
             <div className="flex items-center space-x-4">
               <div className="text-right">
                 <p className="text-sm text-gray-500">Today's Sales</p>
