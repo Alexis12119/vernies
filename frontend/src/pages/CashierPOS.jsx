@@ -72,14 +72,15 @@ const CashierPOS = () => {
   };
 
   const updateQuantity = (productId, newQty) => {
-    if (newQty <= 0) {
+    const quantity = parseInt(newQty);
+    if (isNaN(quantity) || quantity <= 0) {
       setCart(cart.filter(item => item.product_id !== productId));
     } else {
       const item = cart.find(item => item.product_id === productId);
-      if (newQty <= item.stock) {
+      if (quantity <= item.stock) {
         setCart(cart.map(item =>
           item.product_id === productId
-            ? { ...item, qty: newQty }
+            ? { ...item, qty: quantity }
             : item
         ));
       }
@@ -216,29 +217,24 @@ const CashierPOS = () => {
                       <div key={item.product_id} className="flex justify-between items-center">
                         <div>
                           <p className="font-medium">{item.name}</p>
-                          <p className="text-sm text-gray-500">${item.price}</p>
+                          <p className="text-sm text-gray-500">₱ {item.price}</p>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => updateQuantity(item.product_id, item.qty - 1)}
-                            className="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded"
-                          >
-                            -
-                          </button>
-                          <span>{item.qty}</span>
-                          <button
-                            onClick={() => updateQuantity(item.product_id, item.qty + 1)}
-                            className="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded"
-                          >
-                            +
-                          </button>
-                          <button
-                            onClick={() => removeFromCart(item.product_id)}
-                            className="text-red-500 hover:text-red-600"
-                          >
-                            ×
-                          </button>
-                        </div>
+                         <div className="flex items-center space-x-2">
+                           <input
+                             type="number"
+                             min="1"
+                             max={item.stock}
+                             value={item.qty}
+                             onChange={(e) => updateQuantity(item.product_id, e.target.value)}
+                             className="w-16 px-2 py-1 border rounded text-center"
+                           />
+                           <button
+                             onClick={() => removeFromCart(item.product_id)}
+                             className="text-red-500 hover:text-red-600"
+                           >
+                             ×
+                           </button>
+                         </div>
                       </div>
                     ))}
                   </div>
