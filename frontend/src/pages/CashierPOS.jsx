@@ -10,6 +10,9 @@ const CashierPOS = () => {
   const [loading, setLoading] = useState(true);
   const [todaySales, setTodaySales] = useState([]);
   const [totalSales, setTotalSales] = useState(0);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [showPaymentInput, setShowPaymentInput] = useState(false);
+  const [change, setChange] = useState(0);
 
   useEffect(() => {
     fetchProducts();
@@ -91,8 +94,28 @@ const CashierPOS = () => {
     return cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
   };
 
-  const checkout = async () => {
+  const checkout = () => {
     if (cart.length === 0) return;
+    setShowPaymentInput(true);
+    setPaymentAmount('');
+    setChange(0);
+  };
+
+  const processPayment = async () => {
+    const total = getTotal();
+    const payment = parseFloat(paymentAmount);
+    
+    if (isNaN(payment) || payment <= 0) {
+      alert('Please enter a valid payment amount');
+      return;
+    }
+    
+    if (payment < total) {
+      alert('Payment amount is insufficient');
+      return;
+    }
+    
+    setChange(payment - total);
 
     try {
       await salesAPI.createSale({
@@ -106,10 +129,19 @@ const CashierPOS = () => {
       setCart([]);
       fetchProducts();
       fetchTodaySales();
+      setShowPaymentInput(false);
+      setPaymentAmount('');
+      setChange(0);
       alert('Sale completed successfully!');
     } catch (error) {
       alert('Sale failed: ' + (error.response?.data?.error || error.message));
     }
+  };
+
+  const cancelPayment = () => {
+    setShowPaymentInput(false);
+    setPaymentAmount('');
+    setChange(0);
   };
 
   if (loading) {
@@ -210,18 +242,61 @@ const CashierPOS = () => {
                       </div>
                     ))}
                   </div>
-                  <div className="mt-4 pt-4 border-t">
-                    <div className="flex justify-between items-center mb-4">
-                      <span className="font-semibold">Total:</span>
-                      <span className="font-bold text-lg">₱ {getTotal().toFixed(2)}</span>
-                    </div>
-                    <button
-                      onClick={checkout}
-                      className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded"
-                    >
-                      Checkout
-                    </button>
-                  </div>
+                   <div className="mt-4 pt-4 border-t">
+                     <div className="flex justify-between items-center mb-4">
+                       <span className="font-semibold">Total:</span>
+                       <span className="font-bold text-lg">₱ {getTotal().toFixed(2)}</span>
+                     </div>
+                     
+                     {showPaymentInput && (
+                       <div className="space-y-3 mb-4">
+                         <div>
+                           <label className="block text-sm font-medium text-gray-700 mb-1">
+                             Payment Amount
+                           </label>
+                           <input
+                             type="number"
+                             step="0.01"
+                             className="w-full px-3 py-2 border rounded"
+                             value={paymentAmount}
+                             onChange={(e) => setPaymentAmount(e.target.value)}
+                             placeholder="Enter amount received"
+                             autoFocus
+                           />
+                         </div>
+                         {change > 0 && (
+                           <div className="bg-green-50 p-3 rounded">
+                             <p className="text-green-800 font-medium">
+                               Change: ₱ {change.toFixed(2)}
+                             </p>
+                           </div>
+                         )}
+                         <div className="flex space-x-2">
+                           <button
+                             onClick={processPayment}
+                             className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 rounded"
+                           >
+                             Complete Sale
+                           </button>
+                           <button
+                             onClick={cancelPayment}
+                             className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded"
+                           >
+                             Cancel
+                           </button>
+                         </div>
+                       </div>
+                     )}
+                     
+                     {!showPaymentInput && (
+                       <button
+                         onClick={checkout}
+                         className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded"
+                       >
+                         Checkout
+                       </button>
+                     )}
+                   </div>
                 </div>
               )}
             </div>
